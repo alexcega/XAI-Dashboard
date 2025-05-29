@@ -190,7 +190,7 @@ if persona == "First-time Buyer":
         st.write(f"**New predicted price:** ${new_price:,.0f}")
 
     st.markdown("---")
-    st.subheader("Feature Impact")
+    st.subheader("Feature Impact (Local Explanation)")
     col1, col2 ,col3 = st.columns([1,5,1], gap="medium")
     with col2:
         ccol1, ccol2 = st.columns([3,2], gap="medium")
@@ -311,19 +311,93 @@ elif persona == "Real Estate Agent":
     st.download_button("Download Market Report", csv, "report.csv")
 
 else:
+    import matplotlib.colors as mcolors
+    import matplotlib.cm as cm
+
     st.header("Global Feature Importance")
-    feature_cols = ['area','bedrooms','bathrooms','stories',mainroad,'guestroom','basement','hotwaterheating','airconditioning','parking','prefarea','furnishingstatus']
+    feature_cols = ['area','bedrooms','bathrooms','stories','mainroad','guestroom','basement','hotwaterheating','airconditioning','parking','prefarea','furnishingstatus']
     @st.cache_data
     def load_train_features():
         return pd.read_csv("train_features.csv")
     
     X_train = load_train_features()[feature_cols]
     shap_values_full = explainer(X_train)
-    import numpy as np
-    import pandas as _pd
-    glob_imp = _pd.Series(np.abs(shap_values_full.values).mean(axis=0), index=feature_cols).sort_values(ascending=False)
-    st.bar_chart(glob_imp)
+
+    glob_imp = pd.Series(np.abs(shap_values_full.values).mean(axis=0), index=feature_cols).sort_values(ascending=False)
+    n = len(glob_imp)
+    cmap = cm.get_cmap('viridis', n)
+    max_height = glob_imp.values.max()
+
+    bar_width = 60
+    chart_height = 320
+    bar_gap = 20
+
+    # First row: bars with value % on top
+    bars_html = "<div style='display: flex; align-items: flex-end; height: {}px; gap: {}px;'>".format(chart_height, bar_gap)
+    for i, (name, val) in enumerate(glob_imp.items()):
+        color = mcolors.to_hex(cmap(i / (n-1) if n > 1 else 0))
+        pct = (val / max_height) * 100
+        height_px = max(int((val / max_height) * (chart_height - 60)), 20)
+        bars_html += f"""
+        <div style='flex:1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;'>
+            <div style='
+                font-size: 1.08em; 
+                margin-bottom: 4px; 
+                color: #fff; 
+                font-weight: 600; 
+                text-shadow: 0 1px 4px #000c;
+                height: 1.5em;
+            '>{pct:.1f}%</div>
+            <div style='
+                width: {bar_width}px;
+                height: {height_px}px;
+                background: {color};
+                border-radius: 9px 9px 0 0;
+                box-shadow: 0 2px 8px #0002;
+                margin-bottom: 0;
+                display: flex;
+                align-items: flex-end;
+            ' title="{name}: {val:.2f}"></div>
+        </div>"""
+    bars_html += "</div>"
+
+    # Second row: feature names, rotated, spaced to match bars
+    labels_html = "<div style='display: flex; gap: {}px; margin-top: 30px;'>".format(bar_gap)
+    for name in glob_imp.keys():
+        labels_html += f"""
+        <div style='flex:1; display: flex; justify-content: center;'>
+            <div style='
+                font-size: 1em;
+                text-align: center;
+                max-width: 110px;
+                overflow: hidden;
+                white-space: normal;
+                word-break: break-word;
+                transform: rotate(-60deg);
+                margin-top: 0px;
+                margin-bottom: 2px;
+                color: #fff;
+                text-shadow: 0 1px 6px #000a;
+            '>{name}</div>
+        </div>"""
+    labels_html += "</div>"
+
+    st.markdown(f"""
+    <div style='width: 100%;'>
+    <div style='font-size:1.3em; font-weight:700; margin-bottom:20px; color:#fff;'>
+        Global Feature Importance
+    </div>
+    {bars_html}
+    {labels_html}
+    </div>
+    """, unsafe_allow_html=True)
+    bar_html = "<div style='display: flex; align-items: flex-end; height: 240px; gap: 14px;'>"
+
+    bar_html += "</div>"
+
+
+
     st.subheader("Local SHAP Values Table")
     idx = st.number_input("Select Sample Index", 0, len(X_train)-1, 0)
     local_shap = explainer(X_train.iloc[[idx]])
-    st.table(_pd.DataFrame({"feature": feature_cols, "shap_value": local_shap.values[0]}).sort_values(by="shap_value", ascending=False))
+    st.table(pd.DataFrame({"feature": feature_cols, "shap_value": local_shap.values[0]}).sort_values(by="shap_value", ascending=False))
