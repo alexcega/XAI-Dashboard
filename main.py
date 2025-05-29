@@ -4,6 +4,21 @@ import joblib
 import shap
 import matplotlib.pyplot as plt
 
+# get max values
+df = pd.read_csv("Housing.csv")      # or your chosen CSV
+area_min   = df["area"].min()  
+bedrooms_min   = df["bedrooms"].min()
+bathrooms_min = df["bathrooms"].min()
+stories_min = df["stories"].min()
+parking_min = df["parking"].min()
+
+area_max   = df["area"].max()  
+bedrooms_max   = df["bedrooms"].max()
+bathrooms_max = df["bathrooms"].max()
+stories_max = df["stories"].max()
+parking_max = df["parking"].max()
+
+
 # Load model and SHAP explainer using new cache APIs
 @st.cache_resource
 def load_model():
@@ -26,11 +41,12 @@ persona = st.sidebar.selectbox(
 
 # Sidebar: Property features Input
 st.sidebar.header("Property Features")
-area = st.sidebar.number_input("Area (sqft)", min_value=100, value=1000)
-bedrooms = st.sidebar.number_input("Bedrooms", min_value=1, value=3)
-bathrooms = st.sidebar.number_input("Bathrooms", min_value=1, value=2)
-stories = st.sidebar.number_input("Stories", min_value=1, value=1)
-parking = st.sidebar.number_input("Parking spaces", min_value=0, value=1)
+area = st.sidebar.slider("Area (sqft)", min_value=area_min, max_value=area_max ,value=area_max // 2)
+bedrooms = st.sidebar.slider("Bedrooms", min_value=bedrooms_min, max_value=bedrooms_max  ,value=3)
+bathrooms = st.sidebar.slider("Bathrooms", min_value=bathrooms_min, max_value=bathrooms_max  ,value=2)
+stories = st.sidebar.slider("Stories", min_value=stories_min, max_value=stories_max  ,value=1)
+parking = st.sidebar.slider("Parking spaces", min_value=parking_min, max_value=parking_max  ,value=1)
+
 
 binary_options = ["yes", "no"]
 mainroad = st.sidebar.selectbox("Main Road", binary_options)
@@ -89,50 +105,73 @@ if extra_in_input:
 # Only predict if no mismatches
 if not missing_in_input and not extra_in_input:
     pred_price = model.predict(input_df)[0]
-    st.metric("Predicted Price", f"${pred_price:,.0f}")
+    st.title("Predicted Price", )
+    st.metric("", f"${pred_price:,.0f}")
 else:
     st.stop()
 
 # Persona-specific insights
 if persona == "First-time Buyer":
+    age = st.slider("How old are you?", 0, 130, 25)
+    st.write("I'm ", age, "years old")
     st.header("Why this price?")
     n_cols = 4  
     cols = st.columns(n_cols)
 
     # pre-define a color for each feature (or generate at runtime)
     color_map = {
-        "area": "#fde0dd",
-        "bedrooms": "#fa9fb5",
-        "bathrooms": "#c51b8a",
-        "stories": "#e7298a",
-        "parking": "#df65b0",
-        "mainroad": "#d4b9da",
+        "area": "#05445E",
+        "bedrooms": "#189AB4",
+        "bathrooms": "#B5E5CF",
+        "stories": "#1B7E89",
+        "parking": "#189AB4",
+        "mainroad": "#75E6DA",
         "guestroom": "#d9f0d3",
         "basement": "#a6dba0",
         "hotwaterheating": "#5aae61",
         "airconditioning": "#1b7837",
         "prefarea": "#b8e186",
-        "furnishingstatus": "#7fbc41"
+        "furnishingstatus": "#bc4141"
     }
+    binary_color = {"yes": ["#74A483", "#98D7C2", '#167D7F', '#107869'], "no": "red"}
+    green_shades = ["#58B072", "#669E8C", '#167D7F', '#107869', 'green', 'green']
+    red_shades   = ["#B13636", '#F8BABA', '#E05A5A', '#C43E3E', 'red', 'darkred']
 
+    furn_color  = {
+        "furnished":    "#green",   # pale green
+        "semi-furnished":"#yellow",  # pale yellow
+        "unfurnished":  "#red"    # pale red
+    }   
+    yes_color = dict(zip(binary_cols, green_shades))
+    no_color  = dict(zip(binary_cols, red_shades))
     for i, feat in enumerate(feature_cols):
-        val = input_dict[feat]
-        col = cols[i % n_cols]  # wrap to next row automatically
+        raw = input_dict[feat]
+        # pick color based on feature type
+        if feat in binary_cols:
+            bg = yes_color[feat] if raw == "yes" else no_color[feat]
+        elif feat == "furnishingstatus":
+            bg = furn_color.get(raw, "#000000")
+        else:
+            bg = color_map.get(feat, "#eeeeee")
+
+        col = cols[i % n_cols]
         with col:
-            st.markdown(
-                f"""
+            # feature name
+            st.markdown(f"<div style='font-size:18px; font-weight:bold; text-align:center, color:black;'>{feat.replace('_',' ').title()}</div>", unsafe_allow_html=True)
+            # colored box with the value
+            st.markdown(f"""
                 <div style="
-                    background-color: {color_map.get(feat, '#eeeeee')};
-                    padding: 10px;
-                    border-radius: 8px;
+                    background-color: {bg};
+                    padding: 30px;
+                    border-radius: 6px;
                     text-align: center;
-                    ">
-                  <strong>{feat.replace('_',' ').title()}</strong><br>
-                  {val}
+                    font-size:32px;
+                ">
+                {raw}
                 </div>
-                """,
-                unsafe_allow_html=True
-            )
+                """, unsafe_allow_html=True)
+        
+    st.markdown("---")
     if st.button("What if area increases by 10%?"):
         mod_df = input_df.copy()
         mod_df.at[0,"area"] *= 1.1
