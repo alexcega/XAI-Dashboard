@@ -9,6 +9,7 @@ import numpy as np
 import squarify  
 import random
 import os
+import seaborn as sns
 
 # get max values
 df = pd.read_csv("Housing.csv")      # or your chosen CSV
@@ -27,7 +28,8 @@ parking_max = df["parking"].max()
 st.set_page_config(
     page_title="Housing Price Tool",
     layout="wide",               # full-width mode
-    initial_sidebar_state="auto"
+    initial_sidebar_state="auto",
+
 )
 
 
@@ -70,7 +72,6 @@ prefarea = st.sidebar.checkbox("Preferred Area", value=True)
 
 furn_options = ["furnished", "semi-furnished", "unfurnished"]
 furnishingstatus = st.sidebar.selectbox("Furnishing Status", furn_options)
-
 # Prepare and encode input DataFrame
 input_dict = {
     "area": area,
@@ -121,14 +122,20 @@ if not missing_in_input and not extra_in_input:
 else:
     st.stop()
 
+house_dir = "Data_houses/"
+house_files = [f for f in os.listdir(house_dir) if f.lower().endswith((".jpg", ".png", ".jpeg"))]
+
+if "current_house_file" not in st.session_state:
+    st.session_state.current_house_file = random.choice(house_files)
+
 # Persona-specific insights
 if persona == "First-time Buyer":
     
-    col1, col2 ,col3 = st.columns([2,2,1], gap="large")
+    col1, col2 ,col3 = st.columns([2.5,3,2], gap="large")
     # grid of attributes
     with col1:
         st.markdown("### Why this price?")
-        n_cols = 4  
+        n_cols = 3  
         cols = st.columns(n_cols)
 
         # pre-define a color for each feature (or generate at runtime)
@@ -150,15 +157,28 @@ if persona == "First-time Buyer":
         red_shades   = ["#B13636", '#F8BABA', '#E05A5A', '#C43E3E', 'red', 'darkred']
 
         furn_color  = {
-            "furnished":    "#green",   # pale green
-            "semi-furnished":"#yellow",  # pale yellow
-            "unfurnished":  "#red"    # pale red
+            "furnished":    "#177048",   # pale green
+            "semi-furnished":"#E0DA28",  # pale yellow
+            "unfurnished":  "#CE3A1C"    # pale red
         }   
-        st.write()
+
+        furn_display = {
+            0: "Yes",            # if encoded (int)
+            1: "Semi",
+            2: "No",
+            "furnished": "Yes",  # if not encoded (str)
+            "semi-furnished": "Semi",
+            "unfurnished": "No"
+        }
         yes_color = dict(zip(binary_cols, green_shades))
         no_color  = dict(zip(binary_cols, red_shades))
         for i, feat in enumerate(feature_cols):
             raw = input_dict[feat]
+            if feat == "furnishingstatus":
+                display_val = furn_display.get(raw, str(raw))
+            else:
+                display_val = raw
+
             # pick color based on feature type
             if feat in binary_cols:
                 bg = yes_color[feat] if raw == True else no_color[feat]
@@ -179,14 +199,17 @@ if persona == "First-time Buyer":
                         text-align: center;
                         font-size:30px;
                     ">
-                    {raw}
+                    {display_val}
                     </div>
                     """, unsafe_allow_html=True)
     # show image of houses
     with col2:
-        house_dir = "Data_houses/"
-        random_file=random.choice(os.listdir(house_dir))
-        st.image("Data_houses/"+random_file,  caption="Example Home")  # Use your image path
+        st.markdown("### House preview")
+        if st.sidebar.button("Show"):
+            st.session_state.current_house_file = random.choice(house_files)
+            house_dir = "Data_houses/"
+            random_file=random.choice(os.listdir(house_dir))
+            st.image("Data_houses/"+random_file, width=500, caption="Example Home")  # Use your image path
 
     #* Local SHAP Explanation
     shap_values = explainer(input_df)
@@ -199,6 +222,7 @@ if persona == "First-time Buyer":
     feat_perc = list(zip(feat_names, percs))
     feat_perc.sort(key=lambda x: x[1], reverse=True)
     # user questions
+
     with col3:
         row1, row2 = st.columns([1, 1])  # Use columns to split vertically (Streamlit doesn't support sub-rows directly, so this is a trick)
         # But for real vertical splitting, use container or just stacked elements:
@@ -218,36 +242,51 @@ if persona == "First-time Buyer":
         for name, percentage in feat_perc:
             if percentage < 3:
                 st.write(name, "{:.2f}".format(percentage), "%")
-    st.markdown("---")
-    col1, col2 ,col3,col4,col4 = st.columns([2,2,3,3,2], gap="medium")
-    with col2:
-        st.subheader("What if Area Changes?")
-        pct = st.slider("Increase area by (%)", min_value=0, max_value=50, value=10, step=1)
-        new_area = int(input_df.at[0, "area"] * (1 + pct/100))
-        st.write(f"**New area:** {new_area} sqft ({pct}% increase)")
-
-        if st.button("Predict New Price"):
-            mod_df = input_df.copy()
-            mod_df.at[0, "area"] = new_area
-            new_price = model.predict(mod_df)[0]
-            st.success(f"**New predicted price:** ${new_price:,.0f}")
 
     st.markdown("---")
     st.subheader("Feature Impact (Local Explanation)")
-    col1, col2 ,col3 = st.columns([1,5,1], gap="medium")
+
+    col1, col2 ,col3 = st.columns([2,5,1], gap="medium")
     with col1:
+        row1, row2 = st.columns([1, 1])
         st.markdown("""
             <div style='display: gird; align-items: center; gap: 24px; margin-bottom: 18px;'>
                 <div style='display: flex; align-items: center; gap: 8px;'>
                     <div style='width: 24px; height: 24px; background: #2ecc40; border-radius: 4px;'></div>
-                    <span style='font-size: 1.08em;'>Increase</span>
+                    <span style='font-size: 1.08em;'>Increase Price</span>
                 </div>
                 <div style='display: flex; align-items: center; gap: 8px;'>
                     <div style='width: 24px; height: 24px; background: #ff4136; border-radius: 4px;'></div>
-                    <span style='font-size: 1.08em;'>Decrease</span>
+                    <span style='font-size: 1.08em;'>Decrease Price</span>
                 </div>
             </div>
         """, unsafe_allow_html=True)
+        st.markdown("---")
+        your_shap = explainer(input_df).values[0]
+        feat_names = [col.replace('_',' ').title() for col in feature_cols]
+
+        df_shap = pd.DataFrame({
+            'feature': feat_names,
+            'shap': your_shap
+        })
+        df_shap['abs_shap'] = np.abs(df_shap['shap'])
+        df_shap = df_shap.sort_values(by='abs_shap', ascending=False)
+
+        # Pick top 3 positive, top 2 negative
+        top_pos = df_shap[df_shap['shap'] > 0].head(3)
+        top_neg = df_shap[df_shap['shap'] < 0].head(2)
+
+        up_str = ', '.join(top_pos['feature'])
+        down_str = ', '.join(top_neg['feature'])
+
+        explanation_positive = f"This house's high price is mostly due to: \n **{up_str}**."
+        st.markdown(f":bulb: {explanation_positive}")
+
+        explanation_negative = f""
+        if len(top_neg) > 0:
+            explanation_negative += f" Having **{down_str}** slightly lowered the predicted price."
+        st.markdown(f":bulb: {explanation_negative}")
+
     with col2:
         ccol1, ccol2 = st.columns([3,2], gap="medium")
         with ccol1:
@@ -333,11 +372,139 @@ if persona == "First-time Buyer":
                 </div>
                 """, unsafe_allow_html=True)
                 counter += 1
-        shap_val = shap_values[0]
-        fig, ax = plt.subplots()
-        st.subheader("Local Explanation (SHAP)")
-        shap.plots.waterfall(shap_val,  show=False)
-        st.pyplot(fig)
+
+    st.markdown("---")
+
+    col1,col2 = st.columns([5,2],  gap="medium")
+    with col1:  
+        similars = df  # or your subset
+        user_area = input_df.at[0, "area"]
+        user_price = pred_price
+        # 2. Set a modern style
+        sns.set_theme(style="whitegrid")
+
+        sns.set_theme(style="whitegrid")
+        fig, ax = plt.subplots(figsize=(7, 4), facecolor='none')
+
+        # Plot data
+        sns.scatterplot(
+            data=similars,
+            x="area",
+            y="price",
+            ax=ax,
+            s=60,
+            color="#66b3ff",
+            alpha=0.6,
+            edgecolor="w",
+            linewidth=0.5
+        )
+
+        # User's house
+        ax.scatter(
+            [user_area], [user_price],
+            color="#e74c3c",
+            s=180,
+            marker='*',
+            label="Your house",
+            zorder=10,
+            edgecolor='white',
+            linewidth=1.3
+        )
+
+        # White text everywhere
+        ax.set_xlabel("Area (sqft)", fontsize=12, weight='bold', color="white")
+        ax.set_ylabel("Price", fontsize=12, weight='bold', color="white")
+        ax.set_title("Your House in Context", fontsize=15, weight='bold', color="white", pad=14)
+        ax.legend(fontsize=11, loc="upper left", facecolor="none", edgecolor="none", labelcolor='white')
+
+        # Set tick colors to white
+        ax.tick_params(axis='x', colors='white')
+        ax.tick_params(axis='y', colors='white')
+
+        # Make all axes spines white or invisible
+        for spine in ax.spines.values():
+            spine.set_color('white')
+
+        # Remove grid/background
+        ax.set_facecolor('none')
+        fig.patch.set_alpha(0.0)
+
+        # Annotate with white text
+        ax.annotate("Your house",
+                    xy=(user_area, user_price),
+                    xytext=(user_area+50, user_price+0.03*user_price),
+                    arrowprops=dict(arrowstyle="->", color="#e74c3c", lw=2),
+                    fontsize=12, color="white", weight='bold'
+        )
+
+        st.pyplot(fig, transparent=True)
+    with col2:
+        # Suppose:
+        area_min, area_max = df["area"].min(), df["area"].max()
+        price_min, price_max = df["price"].min(), df["price"].max()
+        user_area = input_df.at[0, "area"]
+        user_price = pred_price
+
+        # Get positions as % (0-100)
+        area_pct = int(100 * (user_area - area_min) / (area_max - area_min))
+        price_pct = int(100 * (user_price - price_min) / (price_max - price_min))
+
+        slider_style = """
+        <div style="margin-bottom:18px;">
+        <div style='font-size:1.08em; margin-bottom:2px; color:white;'>Area: {user_area} sqft</div>
+        <div style='position: relative; height: 18px; background: #222; border-radius: 8px;'>
+            <div style='position: absolute; left: {area_pct}%; top: -6px;'>
+            <div style='
+                width: 24px; height: 24px;
+                border-radius: 50%; background: #66b3ff;
+                border: 3px solid white; box-shadow: 0 2px 8px #0006;
+                display: flex; align-items: center; justify-content: center;
+                font-size: 0.95em; color: white; font-weight: 600;'>
+            </div>
+            </div>
+            <div style='position: absolute; left: 0; top: 20px; font-size:0.95em; color: #aaa;'>Min: {area_min}</div>
+            <div style='position: absolute; right: 0; top: 20px; font-size:0.95em; color: #aaa;'>Max: {area_max}</div>
+        </div>
+        </div>
+        <div style="margin-bottom:18px;">
+        <div style='font-size:1.08em; margin-bottom:2px; color:white;'>Price: ${user_price:,.0f}</div>
+        <div style='position: relative; height: 18px; background: #222; border-radius: 8px;'>
+            <div style='position: absolute; left: {price_pct}%; top: -6px;'>
+            <div style='
+                width: 24px; height: 24px;
+                border-radius: 50%; background: #e74c3c;
+                border: 3px solid white; box-shadow: 0 2px 8px #0006;
+                display: flex; align-items: center; justify-content: center;
+                font-size: 0.95em; color: white; font-weight: 600;'>
+            </div>
+            </div>
+            <div style='position: absolute; left: 0; top: 20px; font-size:0.95em; color: #aaa;'>Min: ${price_min:,.0f}</div>
+            <div style='position: absolute; right: 0; top: 20px; font-size:0.95em; color: #aaa;'>Max: ${price_max:,.0f}</div>
+        </div>
+        </div>
+        """.format(
+            user_area=user_area,
+            area_pct=area_pct,
+            area_min=area_min,
+            area_max=area_max,
+            user_price=user_price,
+            price_pct=price_pct,
+            price_min=price_min,
+            price_max=price_max
+        )
+
+        st.markdown("""
+        <div style='
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-height: 500px;    /* tweak to fit your layout */
+        '>
+        """ + slider_style + """
+        </div>
+        """, unsafe_allow_html=True)
+
+
 
 elif persona == "Real Estate Agent":
     st.header("Market Comparison")
@@ -438,10 +605,3 @@ else:
     bar_html = "<div style='display: flex; align-items: flex-end; height: 240px; gap: 14px;'>"
 
     bar_html += "</div>"
-
-
-
-    st.subheader("Local SHAP Values Table")
-    idx = st.number_input("Select Sample Index", 0, len(X_train)-1, 0)
-    local_shap = explainer(X_train.iloc[[idx]])
-    st.table(pd.DataFrame({"feature": feature_cols, "shap_value": local_shap.values[0]}).sort_values(by="shap_value", ascending=False))
