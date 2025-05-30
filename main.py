@@ -35,12 +35,12 @@ st.set_page_config(
 
 
 # Load model and SHAP explainer using new cache APIs
-@st.cache_resource
+# @st.cache_resource
 def load_model():
     # Model was trained on ordinal-encoded features
     return joblib.load("house_price_rf.pkl")
 
-@st.cache_resource
+# @st.cache_resource
 def load_explainer():
     return joblib.load("shap_explainer.pkl")
 
