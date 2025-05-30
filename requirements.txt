@@ -7,3 +7,4 @@ numpy==1.26.4
 seaborn==0.12.2
 scikit-learn==1.2.2
 squarify==0.4.3
+altair==4.2
