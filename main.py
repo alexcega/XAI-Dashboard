@@ -5,6 +5,7 @@ import shap
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from matplotlib.colors import Normalize
+import matplotlib.ticker as ticker
 import numpy as np
 import squarify  
 import random
@@ -246,7 +247,7 @@ if persona == "First-time Buyer":
     st.markdown("---")
     st.subheader("Feature Impact (Local Explanation)")
 
-    col1, col2 ,col3 = st.columns([2,5,1], gap="medium")
+    col1, col2 ,col3 = st.columns([2,3,2], gap="medium")
     with col1:
         row1, row2 = st.columns([1, 1])
         st.markdown("""
@@ -279,19 +280,16 @@ if persona == "First-time Buyer":
         up_str = ', '.join(top_pos['feature'])
         down_str = ', '.join(top_neg['feature'])
 
-        explanation_positive = f"This house's high price is mostly due to: \n **{up_str}**."
+        explanation_positive = f"This house's high price is mostly due to: \n `{up_str}`."
+        st.subheader("Insights") 
         st.markdown(f":bulb: {explanation_positive}")
 
         explanation_negative = f""
         if len(top_neg) > 0:
-            explanation_negative += f" Having **{down_str}** slightly lowered the predicted price."
+            explanation_negative += f" Having `{down_str}`   slightly lowered the predicted price."
         st.markdown(f":bulb: {explanation_negative}")
 
     with col2:
-        ccol1, ccol2 = st.columns([3,2], gap="medium")
-        with ccol1:
-        
-            
             labels = [f"{name}\n{perc:.1f}%" for name, perc in zip(feat_names, percs)]
 
             # Build a continuous red/green map by sign & magnitude
@@ -339,8 +337,8 @@ if persona == "First-time Buyer":
             # 6) Render
             st.pyplot(fig)
 
-        with ccol2:
-            
+    with col3:
+            st.subheader("Ranking of Features")
             counter = 1
             for name, pct in feat_perc:
                 # compute bar width as a percentage of the full column
@@ -414,8 +412,10 @@ if persona == "First-time Buyer":
         # White text everywhere
         ax.set_xlabel("Area (sqft)", fontsize=12, weight='bold', color="white")
         ax.set_ylabel("Price", fontsize=12, weight='bold', color="white")
-        ax.set_title("Your House in Context", fontsize=15, weight='bold', color="white", pad=14)
-        ax.legend(fontsize=11, loc="upper left", facecolor="none", edgecolor="none", labelcolor='white')
+        ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, _: f'${int(x):,}'))
+        # ax.ticklabel_format(style='plain', axis='y')
+        # ax.set_title("Your House in Context", fontsize=15, weight='bold', color="white", pad=14)
+        # ax.legend(fontsize=11, loc="upper left", facecolor="none", edgecolor="none", labelcolor='white')
 
         # Set tick colors to white
         ax.tick_params(axis='x', colors='white')
@@ -451,7 +451,7 @@ if persona == "First-time Buyer":
 
         slider_style = """
         <div style="margin-bottom:18px;">
-        <div style='font-size:1.08em; margin-bottom:2px; color:white;'>Area: {user_area} sqft</div>
+        <div style='font-size:1.8em; margin-bottom:2px; color:white;'>Area: {user_area} sqft</div>
         <div style='position: relative; height: 18px; background: #222; border-radius: 8px;'>
             <div style='position: absolute; left: {area_pct}%; top: -6px;'>
             <div style='
@@ -467,7 +467,7 @@ if persona == "First-time Buyer":
         </div>
         </div>
         <div style="margin-bottom:18px;">
-        <div style='font-size:1.08em; margin-bottom:2px; color:white;'>Price: ${user_price:,.0f}</div>
+        <div style='font-size:1.8em; margin-bottom:2px; color:white;'>Price: ${user_price:,.0f}</div>
         <div style='position: relative; height: 18px; background: #222; border-radius: 8px;'>
             <div style='position: absolute; left: {price_pct}%; top: -6px;'>
             <div style='
