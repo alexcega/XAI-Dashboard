@@ -12,7 +12,55 @@ import random
 import os
 import seaborn as sns
 
-# get max values
+# st configuration
+st.set_page_config(
+    page_title="Housing Price Tool",
+    layout="wide",               # full-width mode
+    initial_sidebar_state="auto",
+
+)
+
+# Page syle
+st.markdown("""
+<style>
+/* Default: normal size */
+.responsive-cell {
+    padding: 30px;
+    font-size: 30px;
+    border-radius: 6px;
+    text-align: center;
+    transition: padding 0.2s, font-size 0.2s;
+}
+/* When window is small (sidebar likely overlaying) */
+@media (max-width: 1200px) {
+    .responsive-cell {
+        padding: 16px !important;
+        font-size: 18px !important;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+
+# Functions
+# @st.cache_resource
+def load_model():
+    # Model was trained on ordinal-encoded features
+    return joblib.load("house_price_rf.pkl")
+
+# @st.cache_resource
+def load_explainer():
+    return joblib.load("shap_explainer.pkl")
+
+# Global vars
+model = load_model()
+explainer = load_explainer()
+    # image directories
+house_dir = "Data_houses/"
+house_files = [f for f in os.listdir(house_dir) if f.lower().endswith((".jpg", ".png", ".jpeg"))]
+
+# get max values for users input
 df = pd.read_csv("Housing.csv")      # or your chosen CSV
 area_min   = df["area"].min()  
 bedrooms_min   = df["bedrooms"].min()
@@ -26,26 +74,19 @@ bathrooms_max = df["bathrooms"].max()
 stories_max = df["stories"].max()
 parking_max = df["parking"].max()
 
-st.set_page_config(
-    page_title="Housing Price Tool",
-    layout="wide",               # full-width mode
-    initial_sidebar_state="auto",
 
-)
+## not in session elements
+if "current_house_file" not in st.session_state:
+    st.session_state.current_house_file = random.choice(house_files)
 
+if 'area' not in st.session_state:
+    st.session_state.area = area_max // 2
 
-# Load model and SHAP explainer using new cache APIs
-# @st.cache_resource
-def load_model():
-    # Model was trained on ordinal-encoded features
-    return joblib.load("house_price_rf.pkl")
+# if 'pred_price' not in st.session_state:
+#     temp_input = input_df.copy()
+#     temp_input.at[0, "area"] = st.session_state.area
+#     st.session_state.pred_price = model.predict(temp_input)[0]
 
-# @st.cache_resource
-def load_explainer():
-    return joblib.load("shap_explainer.pkl")
-
-model = load_model()
-explainer = load_explainer()
 
 # Sidebar: User Persona
 st.sidebar.title("Housing Price Tool")
@@ -57,6 +98,16 @@ persona = st.sidebar.selectbox(
 # Sidebar: Property features Input
 st.sidebar.header("Property Features")
 area = st.sidebar.slider("Area (sqft)", min_value=area_min, max_value=area_max ,value=area_max // 2)
+
+# Sidebar slider uses the session state value, and updates session state
+st.session_state.area = st.sidebar.slider(
+    "Area (sqft)",
+    min_value=area_min,
+    max_value=area_max,
+    value=st.session_state.area,
+    key="area_slider"
+)
+
 bedrooms = st.sidebar.slider("Bedrooms", min_value=bedrooms_min, max_value=bedrooms_max  ,value=2)
 bathrooms = st.sidebar.slider("Bathrooms", min_value=bathrooms_min, max_value=bathrooms_max  ,value=2)
 stories = st.sidebar.slider("Stories", min_value=stories_min, max_value=stories_max  ,value=1)
@@ -90,11 +141,9 @@ input_dict = {
 }
 # Create raw DataFrame
 input_df = pd.DataFrame([input_dict])
-
-
 binary_cols = ["mainroad","guestroom","basement","hotwaterheating","airconditioning","prefarea"]
-
 input_df[binary_cols] = input_df[binary_cols].astype(int)
+
 # Encode furnishingstatus ordinally to match training
 furn_map = {"furnished":0, "semi-furnished":1, "unfurnished":2}
 input_df["furnishingstatus"] = input_df["furnishingstatus"].map(furn_map)
@@ -110,6 +159,7 @@ input_feats = list(input_df.columns)
 missing_in_input = set(trained_feats) - set(input_feats)
 extra_in_input = set(input_feats) - set(trained_feats)
 
+st.title("House price prediction", )
 if missing_in_input:
     st.error(f"Missing in input: {missing_in_input}")
 if extra_in_input:
@@ -118,16 +168,25 @@ if extra_in_input:
 # Only predict if no mismatches
 if not missing_in_input and not extra_in_input:
     pred_price = model.predict(input_df)[0]
-    st.title("Predicted Price", )
-    st.metric("", f"${pred_price:,.0f}")
+    st.markdown(
+        f"""
+        <div style='
+            font-size: 64px; 
+            font-weight: bold; 
+            color: #white; 
+            text-align: right;
+            margin-bottom: 12px;
+        '>
+            ${pred_price:,.0f}
+        </div>
+        <div style='font-size: 20px; color: #777; text-align: right;'>
+            Predicted Price
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
 else:
     st.stop()
-
-house_dir = "Data_houses/"
-house_files = [f for f in os.listdir(house_dir) if f.lower().endswith((".jpg", ".png", ".jpeg"))]
-
-if "current_house_file" not in st.session_state:
-    st.session_state.current_house_file = random.choice(house_files)
 
 # Persona-specific insights
 if persona == "First-time Buyer":
@@ -189,20 +248,32 @@ if persona == "First-time Buyer":
                 bg = color_map.get(feat, "#eeeeee")
 
             col = cols[i % n_cols]
-            with col:                
+            with col:  
+                # st.write(feat)    
+                if feat == 'hotwaterheating':
+                    feat = 'Heating'
+                if feat.title() == 'Furnishingstatus':
+                    feat = "Furnished"
+                if feat == "hotwaterheating":
+                    feat ="Heating"       
+                if feat == 'airconditioning':
+                    feat = 'A/C'
                 st.markdown(f"<div style='font-size:16px; font-weight:bold; text-align:center, color:black;'>{feat.replace('_',' ').title()}</div>", unsafe_allow_html=True)
                 # colored box with the value
                 st.markdown(f"""
-                    <div style="
-                        background-color: {bg};
-                        padding: 30px;
-                        border-radius: 6px;
-                        text-align: center;
-                        font-size:30px;
-                    ">
+                <div class="responsive-cell" style="
+                    background-color: {bg};
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    height: 100%;   /* fill cell height */
+                    min-height: 48px; /* optional: avoid tiny cells */
+                    text-align: center;
+                    border-radius: 6px;
+                ">
                     {display_val}
-                    </div>
-                    """, unsafe_allow_html=True)
+                </div>
+                """, unsafe_allow_html=True)
     # show image of houses
     with col2:
         st.markdown("### House preview")
@@ -210,7 +281,7 @@ if persona == "First-time Buyer":
             st.session_state.current_house_file = random.choice(house_files)
             house_dir = "Data_houses/"
             random_file=random.choice(os.listdir(house_dir))
-            st.image("Data_houses/"+random_file, width=500, caption="Example Home")  # Use your image path
+            st.image("Data_houses/"+random_file,  use_container_width=True, caption="Example Home")  # Use your image path
 
     #* Local SHAP Explanation
     shap_values = explainer(input_df)
@@ -234,9 +305,14 @@ if persona == "First-time Buyer":
         st.write(f"**New area:** {new_area} sqft ({pct1}% increase)")
         if st.button("Predict New Price", key="p1"):
             mod_df = input_df.copy()
-            mod_df.at[0, "area"] = new_area
-            new_price = model.predict(mod_df)[0]
+            input_df.at[0, "area"] = new_area
+            new_price = model.predict(input_df)[0]
             st.success(f"New predicted price: ${new_price:,.0f}")
+
+            # Update price
+            # total_price.
+
+            # update house
 
         st.markdown("---")
         st.markdown("### What are the least important features?")
@@ -295,7 +371,7 @@ if persona == "First-time Buyer":
             # Build a continuous red/green map by sign & magnitude
             norm = Normalize(vmin=-max(abs(sv)), vmax=+max(abs(sv)))
             cmap_pos = cm.get_cmap("Greens")
-            cmap_neg = cm.get_cmap("Reds")
+            cmap_neg = cm.get_cmap("Reds_r")
             colors = [cmap_pos(norm(v)) if v>=0 else cmap_neg(norm(v)) for v in sv]
 
             # Draw the treemap
@@ -346,7 +422,7 @@ if persona == "First-time Buyer":
                 st.markdown(f"""
                 <div style="display: flex; align-items: center; margin-bottom: 4px;">
                 <!-- feature name -->
-                <div style="flex: 1; font-weight: bold; font-size: 1.2em;">{counter}. {name}</div>
+                <div style="flex: 1;  font-size: 1em;">{counter}. {name}</div>
                 <!-- colored bar -->
                 <div style="
                     flex: ;
@@ -413,9 +489,6 @@ if persona == "First-time Buyer":
         ax.set_xlabel("Area (sqft)", fontsize=12, weight='bold', color="white")
         ax.set_ylabel("Price", fontsize=12, weight='bold', color="white")
         ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, _: f'${int(x):,}'))
-        # ax.ticklabel_format(style='plain', axis='y')
-        # ax.set_title("Your House in Context", fontsize=15, weight='bold', color="white", pad=14)
-        # ax.legend(fontsize=11, loc="upper left", facecolor="none", edgecolor="none", labelcolor='white')
 
         # Set tick colors to white
         ax.tick_params(axis='x', colors='white')
