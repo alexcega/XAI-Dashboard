@@ -7,6 +7,8 @@ from matplotlib import cm
 from matplotlib.colors import Normalize
 import numpy as np
 import squarify  
+import random
+import os
 
 # get max values
 df = pd.read_csv("Housing.csv")      # or your chosen CSV
@@ -33,7 +35,7 @@ st.set_page_config(
 @st.cache_resource
 def load_model():
     # Model was trained on ordinal-encoded features
-    return joblib.load("house_price_model.pkl")
+    return joblib.load("house_price_rf.pkl")
 
 @st.cache_resource
 def load_explainer():
@@ -87,8 +89,6 @@ input_dict = {
 # Create raw DataFrame
 input_df = pd.DataFrame([input_dict])
 
-# Encode binaries: yes->1, no->0
-# Convert boolean columns to 1/0
 
 binary_cols = ["mainroad","guestroom","basement","hotwaterheating","airconditioning","prefarea"]
 
@@ -123,9 +123,11 @@ else:
 
 # Persona-specific insights
 if persona == "First-time Buyer":
-    col1, col2 ,col3 = st.columns([2,5,2], gap="medium")
-    with col2:
-        st.header("Why this price?")
+    
+    col1, col2 ,col3 = st.columns([2,2,1], gap="large")
+    # grid of attributes
+    with col1:
+        st.markdown("### Why this price?")
         n_cols = 4  
         cols = st.columns(n_cols)
 
@@ -144,7 +146,6 @@ if persona == "First-time Buyer":
             "prefarea": "#b8e186",
             "furnishingstatus": "#bc4141"
         }
-        binary_color = {"yes": ["#74A483", "#98D7C2", '#167D7F', '#107869'], "no": "red"}
         green_shades = ["#58B072", "#669E8C", '#167D7F', '#107869', 'green', "#2AAE9A"]
         red_shades   = ["#B13636", '#F8BABA', '#E05A5A', '#C43E3E', 'red', 'darkred']
 
@@ -181,32 +182,77 @@ if persona == "First-time Buyer":
                     {raw}
                     </div>
                     """, unsafe_allow_html=True)
-        
+    # show image of houses
+    with col2:
+        house_dir = "Data_houses/"
+        random_file=random.choice(os.listdir(house_dir))
+        st.image("Data_houses/"+random_file,  caption="Example Home")  # Use your image path
+
+    #* Local SHAP Explanation
+    shap_values = explainer(input_df)
+    sv = shap_values.values[0]
+    feat_names = [f.replace('_',' ').title() for f in feature_cols]
+    # Compute sizes and percentages
+    sizes = np.abs(sv)
+    total = sizes.sum()
+    percs = [(v/total)*100 for v in sizes]
+    feat_perc = list(zip(feat_names, percs))
+    feat_perc.sort(key=lambda x: x[1], reverse=True)
+    # user questions
+    with col3:
+        row1, row2 = st.columns([1, 1])  # Use columns to split vertically (Streamlit doesn't support sub-rows directly, so this is a trick)
+        # But for real vertical splitting, use container or just stacked elements:
+        st.markdown("### What if Area Changes?")
+        # e.g. area increase
+        pct1 = st.slider("Increase area by (%)", 0, 50, 10, key="area_inc")
+        new_area = int(input_df.at[0, "area"] * (1 + pct1/100))
+        st.write(f"**New area:** {new_area} sqft ({pct1}% increase)")
+        if st.button("Predict New Price", key="p1"):
+            mod_df = input_df.copy()
+            mod_df.at[0, "area"] = new_area
+            new_price = model.predict(mod_df)[0]
+            st.success(f"New predicted price: ${new_price:,.0f}")
+
+        st.markdown("---")
+        st.markdown("### What are the least important features?")
+        for name, percentage in feat_perc:
+            if percentage < 3:
+                st.write(name, "{:.2f}".format(percentage), "%")
     st.markdown("---")
-    if st.button("What if area increases by 10%?"):
-        mod_df = input_df.copy()
-        mod_df.at[0,"area"] *= 1.1
-        new_price = model.predict(mod_df)[0]
-        st.write(f"**New predicted price:** ${new_price:,.0f}")
+    col1, col2 ,col3,col4,col4 = st.columns([2,2,3,3,2], gap="medium")
+    with col2:
+        st.subheader("What if Area Changes?")
+        pct = st.slider("Increase area by (%)", min_value=0, max_value=50, value=10, step=1)
+        new_area = int(input_df.at[0, "area"] * (1 + pct/100))
+        st.write(f"**New area:** {new_area} sqft ({pct}% increase)")
+
+        if st.button("Predict New Price"):
+            mod_df = input_df.copy()
+            mod_df.at[0, "area"] = new_area
+            new_price = model.predict(mod_df)[0]
+            st.success(f"**New predicted price:** ${new_price:,.0f}")
 
     st.markdown("---")
     st.subheader("Feature Impact (Local Explanation)")
     col1, col2 ,col3 = st.columns([1,5,1], gap="medium")
+    with col1:
+        st.markdown("""
+            <div style='display: gird; align-items: center; gap: 24px; margin-bottom: 18px;'>
+                <div style='display: flex; align-items: center; gap: 8px;'>
+                    <div style='width: 24px; height: 24px; background: #2ecc40; border-radius: 4px;'></div>
+                    <span style='font-size: 1.08em;'>Increase</span>
+                </div>
+                <div style='display: flex; align-items: center; gap: 8px;'>
+                    <div style='width: 24px; height: 24px; background: #ff4136; border-radius: 4px;'></div>
+                    <span style='font-size: 1.08em;'>Decrease</span>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
     with col2:
         ccol1, ccol2 = st.columns([3,2], gap="medium")
         with ccol1:
-        #* Local SHAP Explanation
         
-            shap_values = explainer(input_df)
             
-            sv = shap_values.values[0]
-            feat_names = [f.replace('_',' ').title() for f in feature_cols]
-
-                
-            # Compute sizes and percentages
-            sizes = np.abs(sv)
-            total = sizes.sum()
-            percs = [(v/total)*100 for v in sizes]
             labels = [f"{name}\n{perc:.1f}%" for name, perc in zip(feat_names, percs)]
 
             # Build a continuous red/green map by sign & magnitude
@@ -255,9 +301,7 @@ if persona == "First-time Buyer":
             st.pyplot(fig)
 
         with ccol2:
-            # max_pct = max(p for _, p in percs)
-            feat_perc = list(zip(feat_names, percs))
-            feat_perc.sort(key=lambda x: x[1], reverse=True)
+            
             counter = 1
             for name, pct in feat_perc:
                 # compute bar width as a percentage of the full column
