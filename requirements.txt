@@ -1,4 +1,4 @@
-streamlit==1.18.0
+streamlit>=1.20.0
 pandas==2.2.2
 joblib==1.2.0
 shap==0.43.0
