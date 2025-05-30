@@ -1,7 +1,7 @@
 streamlit>=1.20.0
 pandas==2.2.2
 joblib==1.2.0
-shap==0.43.0
+shap==0.47.2
 matplotlib==3.8.4
 numpy==1.26.4
 seaborn==0.12.2
