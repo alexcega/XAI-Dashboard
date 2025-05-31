@@ -161,7 +161,7 @@ if extra_in_input:
 col1, col2  = st.columns([1,1], gap="medium")
 with col1:
     st.markdown("**Welcome to the XAI dashboard!**")
-    st.markdown("Change the data on the side bar and understand the result on the different module here")
+    st.markdown("Change the data on the side bar and understand the result on the different module here.")
 with col2:
     # Only predict if no mismatches
     if not missing_in_input and not extra_in_input:
