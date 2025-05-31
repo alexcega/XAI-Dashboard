@@ -158,28 +158,33 @@ if missing_in_input:
 if extra_in_input:
     st.error(f"Extra in input: {extra_in_input}")
 
-# Only predict if no mismatches
-if not missing_in_input and not extra_in_input:
-    pred_price = model.predict(input_df)[0]
-    st.markdown(
-        f"""
-        <div style='
-            font-size: 64px; 
-            font-weight: bold; 
-            color: #white; 
-            text-align: right;
-            margin-bottom: 12px;
-        '>
-            ${pred_price:,.0f}
-        </div>
-        <div style='font-size: 20px; color: #777; text-align: right;'>
-            Predicted Price
-        </div>
-        """, 
-        unsafe_allow_html=True
-    )
-else:
-    st.stop()
+col1, col2  = st.columns([1,1], gap="medium")
+with col1:
+    st.markdown("**Welcome to the XAI dashboard!**")
+    st.markdown("Change the data on the side bar and understand the result on the different module here")
+with col2:
+    # Only predict if no mismatches
+    if not missing_in_input and not extra_in_input:
+        pred_price = model.predict(input_df)[0]
+        st.markdown(
+            f"""
+            <div style='
+                font-size: 64px; 
+                font-weight: bold; 
+                color: #white; 
+                text-align: right;
+                margin-bottom: 12px;
+            '>
+                ${pred_price:,.0f}
+            </div>
+            <div style='font-size: 20px; color: #777; text-align: right;'>
+                Predicted Price
+            </div>
+            """, 
+            unsafe_allow_html=True
+        )
+    else:
+        st.stop()
 
 
 # Persona-specific insights
@@ -754,32 +759,32 @@ with st.expander("🤖 Understanding the model", expanded=(persona == "Understan
 
         markdown_html = f"""
         <div style='width: 100%;'>
-            <div style='font-size:1.3em; font-weight:700; margin-bottom:10px; color:#1fc974;'>
+            <div style='font-size:1.3em; font-weight:700; margin-bottom:10px; color:white'>
                 🔥 Most Important Features Overall
             </div>
-            <div style='display: grid; grid-template-columns: 1fr auto; gap: 10px; color:#fff; font-size:1em; line-height:1.8;'>
+            <div style='display: grid; grid-template-columns: 1fr auto; gap: 10px; font-size:1em; line-height:1.8;'>
         """
 
         for i, (name, val) in enumerate(top_features, 1):
             val_formatted = f"{int(val):,}"
             markdown_html += f"""
-            <div><b>{i}° {name}</b></div>
-            <div style='text-align: right;'> ${val_formatted}</div>
+            <div style=color:white><b>{i}° {name}</b></div>
+            <div style='text-align: right; color:white'> ${val_formatted}</div>
             """
 
         markdown_html += """
             </div>
-            <div style='font-size:1.3em; font-weight:700; margin:30px 0 10px; color:#f75d59;'>
+            <div style='font-size:1.3em; font-weight:700; margin:30px 0 10px; color:white'>
                 🧊 Least Important Features Overall
             </div>
-            <div style='display: grid; grid-template-columns: 1fr auto; gap: 10px; color:#fff; font-size:1em; line-height:1.8;'>
+            <div style='display: grid; grid-template-columns: 1fr auto; gap: 10px; font-size:1em; line-height:1.8;'>
         """
 
         for i, (name, val) in enumerate(bottom_features, 1):
             val_formatted = f"{int(val):,}"
             markdown_html += f"""
-            <div><b>{i}° {name}</b></div>
-            <div style='text-align: right;'> ${val_formatted}</div>
+            <div style=color:white><b>{i}° {name}</b></div>
+            <div style='text-align: right; color:white'> ${val_formatted}</div>
             """
 
         markdown_html += """
@@ -808,9 +813,7 @@ with st.expander("🤖 Understanding the model", expanded=(persona == "Understan
                 <div style='
                     font-size: 1.08em; 
                     margin-bottom: 4px; 
-                    color: #fff; 
                     font-weight: 600; 
-                    text-shadow: 0 1px 4px #000c;
                     height: 1.5em;
                 '>{i+1}°</div>
                 <div style='
@@ -842,15 +845,13 @@ with st.expander("🤖 Understanding the model", expanded=(persona == "Understan
                     transform: rotate(-60deg);
                     margin-top: 0px;
                     margin-bottom: 2px;
-                    color: #fff;
-                    text-shadow: 0 1px 6px #000a;
                 '>{name}</div>
             </div>"""
         labels_html += "</div>"
 
         st.markdown(f"""
         <div style='width: 100%;'>
-        <div style='font-size:1.3em; font-weight:700; margin-bottom:20px; color:#fff;'>
+        <div style='font-size:1.3em; font-weight:700; margin-bottom:20px;'>
             Ranking of global features
         </div>
         {bars_html}
