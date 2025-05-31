@@ -3,7 +3,8 @@ import pandas as pd
 import joblib
 import shap
 import matplotlib.pyplot as plt
-from matplotlib import cm
+import matplotlib.cm as cm
+import matplotlib.colors as mcolors
 from matplotlib.colors import Normalize
 import matplotlib.ticker as ticker
 import numpy as np
@@ -11,7 +12,7 @@ import squarify
 import random
 import os
 import seaborn as sns
-
+import streamlit.components.v1 as components
 # st configuration
 st.set_page_config(
     page_title="Housing Price Tool",
@@ -44,12 +45,12 @@ st.markdown("""
 
 
 # Functions
-# @st.cache_resource
+@st.cache_resource
 def load_model():
     # Model was trained on ordinal-encoded features
     return joblib.load("house_price_rf.pkl")
 
-# @st.cache_resource
+@st.cache_resource
 def load_explainer():
     return joblib.load("shap_explainer.pkl")
 
@@ -79,20 +80,12 @@ parking_max = df["parking"].max()
 if "current_house_file" not in st.session_state:
     st.session_state.current_house_file = random.choice(house_files)
 
-if 'area' not in st.session_state:
-    st.session_state.area = area_max // 2
-
-# if 'pred_price' not in st.session_state:
-#     temp_input = input_df.copy()
-#     temp_input.at[0, "area"] = st.session_state.area
-#     st.session_state.pred_price = model.predict(temp_input)[0]
-
 
 # Sidebar: User Persona
 st.sidebar.title("Housing Price Tool")
 persona = st.sidebar.selectbox(
-    "I am a…", 
-    ["First-time Buyer", "Real Estate Agent", "Data Scientist"]
+    "I want to …", 
+    ["See my house", "Understand the prediction", "Understand the data", "Understand the model"]
 )
 
 # Sidebar: Property features Input
@@ -100,13 +93,13 @@ st.sidebar.header("Property Features")
 area = st.sidebar.slider("Area (sqft)", min_value=area_min, max_value=area_max ,value=area_max // 2)
 
 # Sidebar slider uses the session state value, and updates session state
-st.session_state.area = st.sidebar.slider(
-    "Area (sqft)",
-    min_value=area_min,
-    max_value=area_max,
-    value=st.session_state.area,
-    key="area_slider"
-)
+# st.session_state.area = st.sidebar.slider(
+#     "Area (sqft)",
+#     min_value=area_min,
+#     max_value=area_max,
+#     value=st.session_state.area,
+#     key="area_slider"
+# )
 
 bedrooms = st.sidebar.slider("Bedrooms", min_value=bedrooms_min, max_value=bedrooms_max  ,value=2)
 bathrooms = st.sidebar.slider("Bathrooms", min_value=bathrooms_min, max_value=bathrooms_max  ,value=2)
@@ -188,9 +181,9 @@ if not missing_in_input and not extra_in_input:
 else:
     st.stop()
 
+
 # Persona-specific insights
-if persona == "First-time Buyer":
-    
+with st.expander("🏡 For Buyers", expanded=(persona == "See my house")):
     col1, col2 ,col3 = st.columns([2.5,3,2], gap="large")
     # grid of attributes
     with col1:
@@ -309,11 +302,6 @@ if persona == "First-time Buyer":
             new_price = model.predict(input_df)[0]
             st.success(f"New predicted price: ${new_price:,.0f}")
 
-            # Update price
-            # total_price.
-
-            # update house
-
         st.markdown("---")
         st.markdown("### What are the least important features?")
         for name, percentage in feat_perc:
@@ -321,6 +309,162 @@ if persona == "First-time Buyer":
                 st.write(name, "{:.2f}".format(percentage), "%")
 
     st.markdown("---")
+    st.subheader("Understanding the market")
+    # Persona-specific insights
+    col1,col2 = st.columns([5,2],  gap="medium")
+    with col1:  
+        similars = df  # or your subset
+        user_area = input_df.at[0, "area"]
+        user_price = pred_price
+        # 2. Set a modern style
+        sns.set_theme(style="whitegrid")
+
+        sns.set_theme(style="whitegrid")
+        fig, ax = plt.subplots(figsize=(7, 4), facecolor='none')
+
+        # Plot data
+        sns.scatterplot(
+            data=similars,
+            x="area",
+            y="price",
+            ax=ax,
+            s=60,
+            color="#66b3ff",
+            alpha=0.6,
+            edgecolor="w",
+            linewidth=0.5
+        )
+
+        # User's house
+        ax.scatter(
+            [user_area], [user_price],
+            color="#e74c3c",
+            s=180,
+            marker='*',
+            label="Your house",
+            zorder=10,
+            edgecolor='white',
+            linewidth=1.3
+        )
+
+        # White text everywhere
+        ax.set_xlabel("Area (sqft)", fontsize=12, weight='bold', color="white")
+        ax.set_ylabel("Price", fontsize=12, weight='bold', color="white")
+        ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, _: f'${int(x):,}'))
+
+        # Set tick colors to white
+        ax.tick_params(axis='x', colors='white')
+        ax.tick_params(axis='y', colors='white')
+
+        # Make all axes spines white or invisible
+        for spine in ax.spines.values():
+            spine.set_color('white')
+
+        # Remove grid/background
+        ax.set_facecolor('none')
+        fig.patch.set_alpha(0.0)
+
+        # Annotate with white text
+        ax.annotate("Your house",
+                    xy=(user_area, user_price),
+                    xytext=(user_area+50, user_price+0.03*user_price),
+                    arrowprops=dict(arrowstyle="->", color="#e74c3c", lw=2),
+                    fontsize=12, color="white", weight='bold'
+        )
+
+        st.pyplot(fig, transparent=True)
+    with col2:
+        
+        # Suppose:
+        area_min, area_max = df["area"].min(), df["area"].max()
+        price_min, price_max = df["price"].min(), df["price"].max()
+        user_area = input_df.at[0, "area"]
+        user_price = pred_price
+
+        # Get positions as % (0-100)
+        area_pct = int(100 * (user_area - area_min) / (area_max - area_min))
+        price_pct = int(100 * (user_price - price_min) / (price_max - price_min))
+        
+        
+        area_median = df["area"].mean()
+        price_median = df["price"].mean()
+        if user_area >= area_median:
+            area_txt = f"This house is among the top {100 - area_pct:.1f}% largest of properties on the market."
+        else:
+            area_txt = f"This house is among the top {area_pct:.1f}% smallest of properties on the market."
+
+        if user_price >= price_median:
+            price_txt = f"This house is one of the top {100 - price_pct:.1f}% most expensive in the market"
+        else:
+            price_txt = f"This house is one of the top ({price_pct:.1f}% cheapest in the market."
+
+        st.markdown(f"""
+        <div style="font-size:1.0em; ">
+            🏠 {area_txt}<br>
+            💰 {price_txt}
+        </div>
+        """, unsafe_allow_html=True)
+
+        slider_style = """
+        <div style="margin-bottom:18px;">
+        <div style='font-size:1.2em; margin-bottom:2px; color:white;'>Area: {user_area} sqft</div>
+        <div style='position: relative; height: 18px; background: #222; border-radius: 8px;'>
+            <div style='position: absolute; left: {area_pct}%; top: -6px;'>
+            <div style='
+                width: 24px; height: 24px;
+                border-radius: 50%; background: #66b3ff;
+                border: 3px solid white; box-shadow: 0 2px 8px #0006;
+                display: flex; align-items: center; justify-content: center;
+                font-size: 0.95em; color: white; font-weight: 600;'>
+            </div>
+            </div>
+            <div style='position: absolute; left: 0; top: 20px; font-size:0.95em; color: #aaa;'>Min: {area_min}</div>
+            <div style='position: absolute; right: 0; top: 20px; font-size:0.95em; color: #aaa;'>Max: {area_max}</div>
+        </div>
+        </div>
+        <div style="margin-bottom:18px;">
+        <div style='font-size:1.2em; margin-bottom:2px; color:white;'>Price: ${user_price:,.0f}</div>
+        <div style='position: relative; height: 18px; background: #222; border-radius: 8px;'>
+            <div style='position: absolute; left: {price_pct}%; top: -6px;'>
+            <div style='
+                width: 24px; height: 24px;
+                border-radius: 50%; background: #e74c3c;
+                border: 3px solid white; box-shadow: 0 2px 8px #0006;
+                display: flex; align-items: center; justify-content: center;
+                font-size: 0.95em; color: white; font-weight: 600;'>
+            </div>
+            </div>
+            <div style='position: absolute; left: 0; top: 20px; font-size:0.95em; color: #aaa;'>Min: ${price_min:,.0f}</div>
+            <div style='position: absolute; right: 0; top: 20px; font-size:0.95em; color: #aaa;'>Max: ${price_max:,.0f}</div>
+        </div>
+        </div>
+        """.format(
+            user_area=user_area,
+            area_pct=area_pct,
+            area_min=area_min,
+            area_max=area_max,
+            user_price=user_price,
+            price_pct=price_pct,
+            price_min=price_min,
+            price_max=price_max
+        )
+
+        st.markdown("""
+        <div style='
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-height: 200px;    /* tweak to fit your layout */
+        '>
+        """ + slider_style + """
+        </div>
+        """, unsafe_allow_html=True)
+
+#############################################################
+
+
+#############################################################
+with st.expander("☝️🤓 Understanding the prediction", expanded=(persona == "Understand the prediction")):
     st.subheader("Feature Impact (Local Explanation)")
 
     col1, col2 ,col3 = st.columns([2,3,2], gap="medium")
@@ -366,6 +510,7 @@ if persona == "First-time Buyer":
         st.markdown(f":bulb: {explanation_negative}")
 
     with col2:
+            st.markdown("### Impact by size")
             labels = [f"{name}\n{perc:.1f}%" for name, perc in zip(feat_names, percs)]
 
             # Build a continuous red/green map by sign & magnitude
@@ -448,233 +593,268 @@ if persona == "First-time Buyer":
                 counter += 1
 
     st.markdown("---")
+#########################################
 
-    col1,col2 = st.columns([5,2],  gap="medium")
-    with col1:  
-        similars = df  # or your subset
-        user_area = input_df.at[0, "area"]
-        user_price = pred_price
-        # 2. Set a modern style
+#########################################
+with st.expander("🔢 Understanding the data", expanded=(persona == "Understand the data")):
+    @st.cache_resource
+
+    def plot_feature_distribution(df, feature, value):
+        # Set modern whitegrid theme
         sns.set_theme(style="whitegrid")
 
-        sns.set_theme(style="whitegrid")
-        fig, ax = plt.subplots(figsize=(7, 4), facecolor='none')
+        fig, ax = plt.subplots(figsize=(6, 3.5), facecolor='none')
 
-        # Plot data
-        sns.scatterplot(
-            data=similars,
-            x="area",
-            y="price",
-            ax=ax,
-            s=60,
-            color="#66b3ff",
-            alpha=0.6,
-            edgecolor="w",
-            linewidth=0.5
-        )
+        # Plot histogram
+        sns.histplot(df[feature], bins=30, color="#3891A6", alpha=0.8, ax=ax)
+        
+        # Vertical line for the selected value
+        ax.axvline(value, color="#e74c3c", linestyle="--", lw=3)
 
-        # User's house
-        ax.scatter(
-            [user_area], [user_price],
-            color="#e74c3c",
-            s=180,
-            marker='*',
-            label="Your house",
-            zorder=10,
-            edgecolor='white',
-            linewidth=1.3
-        )
-
-        # White text everywhere
-        ax.set_xlabel("Area (sqft)", fontsize=12, weight='bold', color="white")
-        ax.set_ylabel("Price", fontsize=12, weight='bold', color="white")
-        ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, _: f'${int(x):,}'))
+        # Set titles and labels
+        ax.set_title(f"{feature.title()} Distribution", fontsize=16, weight='bold', color="white")
+        ax.set_xlabel(feature.title(), fontsize=12, weight='bold', color="white")
+        ax.set_ylabel("Count", fontsize=12, weight='bold', color="white")
 
         # Set tick colors to white
         ax.tick_params(axis='x', colors='white')
         ax.tick_params(axis='y', colors='white')
 
-        # Make all axes spines white or invisible
+        # Make all axes spines white
         for spine in ax.spines.values():
             spine.set_color('white')
 
-        # Remove grid/background
+        # Remove grid and set background transparent
         ax.set_facecolor('none')
         fig.patch.set_alpha(0.0)
 
-        # Annotate with white text
-        ax.annotate("Your house",
-                    xy=(user_area, user_price),
-                    xytext=(user_area+50, user_price+0.03*user_price),
-                    arrowprops=dict(arrowstyle="->", color="#e74c3c", lw=2),
-                    fontsize=12, color="white", weight='bold'
-        )
+        # Tight layout
+        fig.tight_layout()
 
+        # Plot in Streamlit
         st.pyplot(fig, transparent=True)
+
+    col1, col2= st.columns([2,3], gap="medium")
+    with col1:
+        row1, row2 = st.columns([1,1])
+        plot_feature_distribution(df, "area",   input_df.at[0, "area"])
+        st.markdown("---")
+
+        plot_feature_distribution(df, "price", pred_price)
     with col2:
-        # Suppose:
-        area_min, area_max = df["area"].min(), df["area"].max()
-        price_min, price_max = df["price"].min(), df["price"].max()
-        user_area = input_df.at[0, "area"]
-        user_price = pred_price
-
-        # Get positions as % (0-100)
-        area_pct = int(100 * (user_area - area_min) / (area_max - area_min))
-        price_pct = int(100 * (user_price - price_min) / (price_max - price_min))
-
-        slider_style = """
-        <div style="margin-bottom:18px;">
-        <div style='font-size:1.8em; margin-bottom:2px; color:white;'>Area: {user_area} sqft</div>
-        <div style='position: relative; height: 18px; background: #222; border-radius: 8px;'>
-            <div style='position: absolute; left: {area_pct}%; top: -6px;'>
-            <div style='
-                width: 24px; height: 24px;
-                border-radius: 50%; background: #66b3ff;
-                border: 3px solid white; box-shadow: 0 2px 8px #0006;
-                display: flex; align-items: center; justify-content: center;
-                font-size: 0.95em; color: white; font-weight: 600;'>
-            </div>
-            </div>
-            <div style='position: absolute; left: 0; top: 20px; font-size:0.95em; color: #aaa;'>Min: {area_min}</div>
-            <div style='position: absolute; right: 0; top: 20px; font-size:0.95em; color: #aaa;'>Max: {area_max}</div>
+        total_houses = df["area"].count()
+        st.markdown(
+        f"""
+        <div style='font-size: 20px; color: #white; text-align: right;'>
+            Total houses 
         </div>
-        </div>
-        <div style="margin-bottom:18px;">
-        <div style='font-size:1.8em; margin-bottom:2px; color:white;'>Price: ${user_price:,.0f}</div>
-        <div style='position: relative; height: 18px; background: #222; border-radius: 8px;'>
-            <div style='position: absolute; left: {price_pct}%; top: -6px;'>
-            <div style='
-                width: 24px; height: 24px;
-                border-radius: 50%; background: #e74c3c;
-                border: 3px solid white; box-shadow: 0 2px 8px #0006;
-                display: flex; align-items: center; justify-content: center;
-                font-size: 0.95em; color: white; font-weight: 600;'>
-            </div>
-            </div>
-            <div style='position: absolute; left: 0; top: 20px; font-size:0.95em; color: #aaa;'>Min: ${price_min:,.0f}</div>
-            <div style='position: absolute; right: 0; top: 20px; font-size:0.95em; color: #aaa;'>Max: ${price_max:,.0f}</div>
-        </div>
-        </div>
-        """.format(
-            user_area=user_area,
-            area_pct=area_pct,
-            area_min=area_min,
-            area_max=area_max,
-            user_price=user_price,
-            price_pct=price_pct,
-            price_min=price_min,
-            price_max=price_max
-        )
-
-        st.markdown("""
         <div style='
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            min-height: 500px;    /* tweak to fit your layout */
+            font-size: 50px; 
+            font-weight: bold; 
+            color: #white; 
+            text-align: right;
+            margin-bottom: 12px;
         '>
-        """ + slider_style + """
+            {total_houses}
         </div>
-        """, unsafe_allow_html=True)
+        """, 
+        unsafe_allow_html=True
+        )
+        # Efect of var on price
+        cat_cols = [
+            "mainroad",
+            "guestroom",
+            "basement",
+            "hotwaterheating",
+            "airconditioning",
+            "prefarea",
+            "furnishingstatus",
+        ]
+
+        non_cat_feature_cols = [col for col in feature_cols if col not in cat_cols]
+
+        feature_to_vary = st.selectbox("Explore effect of...", non_cat_feature_cols)
+
+        vals = np.linspace(df[feature_to_vary].min(), df[feature_to_vary].max(), 40)
+        input_copy = input_df.copy()
+        preds = []
+
+        for v in vals:
+            input_copy.at[0, feature_to_vary] = v
+            preds.append(model.predict(input_copy)[0])
+
+        # Set theme
+        sns.set_theme(style="whitegrid")
+
+        fig, ax = plt.subplots(figsize=(6, 3), facecolor='none')
+
+        # Plot line
+        ax.plot(vals, preds, color="#cb4b16", lw=3)
+
+        # Set labels and title with white font
+        ax.set_xlabel(feature_to_vary.title(), fontsize=12, weight='bold', color="white")
+        ax.set_ylabel("Predicted Price", fontsize=12, weight='bold', color="white")
+        ax.set_title(f"Effect of {feature_to_vary.title()} on Price", fontsize=12, weight='bold', color="white")
+
+        # Set tick colors to white
+        ax.tick_params(axis='x', colors='white')
+        ax.tick_params(axis='y', colors='white')
+
+        # Make all axes spines white
+        for spine in ax.spines.values():
+            spine.set_color('white')
+
+        # Set transparent backgrounds
+        ax.set_facecolor('none')
+        fig.patch.set_alpha(0.0)
+
+        # Optional: if you want to remove grid lines completely
+        # ax.grid(False)
+
+        fig.tight_layout()
+        st.pyplot(fig, transparent=True)
 
 
+####################################################
 
-elif persona == "Real Estate Agent":
-    st.header("Market Comparison")
-    @st.cache_data
-    def load_listings():
-        return pd.read_csv("comparison_listings.csv")
-    df = load_listings()
-    # Apply same encoding to listings before predict
-    for col in binary_cols:
-        df[col] = df[col].map({"yes":1, "no":0})
-    df["furnishingstatus"] = df["furnishingstatus"].map(furn_map)
-    df["predicted_price"] = model.predict(df[feature_cols])
-    st.line_chart(df.set_index("id")["predicted_price"])
-    csv = df.to_csv(index=False)
-    st.download_button("Download Market Report", csv, "report.csv")
-
-else:
-    import matplotlib.colors as mcolors
-    import matplotlib.cm as cm
-
+####################################################
+with st.expander("🤖 Understanding the model", expanded=(persona == "Understand the model")):
     st.header("Global Feature Importance")
     feature_cols = ['area','bedrooms','bathrooms','stories','mainroad','guestroom','basement','hotwaterheating','airconditioning','parking','prefarea','furnishingstatus']
     @st.cache_data
     def load_train_features():
         return pd.read_csv("train_features.csv")
-    
+
     X_train = load_train_features()[feature_cols]
     shap_values_full = explainer(X_train)
 
+    # Sort the global importance
     glob_imp = pd.Series(np.abs(shap_values_full.values).mean(axis=0), index=feature_cols).sort_values(ascending=False)
-    n = len(glob_imp)
-    cmap = cm.get_cmap('viridis', n)
-    max_height = glob_imp.values.max()
+    glob_imp_sorted = dict(sorted(glob_imp.items(), key=lambda item: item[1], reverse=True))
 
-    bar_width = 60
-    chart_height = 320
-    bar_gap = 20
+    # Top N and Bottom N
+    top_n = 5
+    bottom_n = 5
 
-    # First row: bars with value % on top
-    bars_html = "<div style='display: flex; align-items: flex-end; height: {}px; gap: {}px;'>".format(chart_height, bar_gap)
-    for i, (name, val) in enumerate(glob_imp.items()):
-        color = mcolors.to_hex(cmap(i / (n-1) if n > 1 else 0))
-        pct = (val / max_height) * 100
-        height_px = max(int((val / max_height) * (chart_height - 60)), 20)
-        bars_html += f"""
-        <div style='flex:1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;'>
-            <div style='
-                font-size: 1.08em; 
-                margin-bottom: 4px; 
-                color: #fff; 
-                font-weight: 600; 
-                text-shadow: 0 1px 4px #000c;
-                height: 1.5em;
-            '>{pct:.1f}%</div>
-            <div style='
-                width: {bar_width}px;
-                height: {height_px}px;
-                background: {color};
-                border-radius: 9px 9px 0 0;
-                box-shadow: 0 2px 8px #0002;
-                margin-bottom: 0;
-                display: flex;
-                align-items: flex-end;
-            ' title="{name}: {val:.2f}"></div>
-        </div>"""
-    bars_html += "</div>"
+    top_features = list(glob_imp_sorted.items())[:top_n]
+    bottom_features = list(glob_imp_sorted.items())[-bottom_n:]
 
-    # Second row: feature names, rotated, spaced to match bars
-    labels_html = "<div style='display: flex; gap: {}px; margin-top: 30px;'>".format(bar_gap)
-    for name in glob_imp.keys():
-        labels_html += f"""
-        <div style='flex:1; display: flex; justify-content: center;'>
-            <div style='
-                font-size: 1em;
-                text-align: center;
-                max-width: 110px;
-                overflow: hidden;
-                white-space: normal;
-                word-break: break-word;
-                transform: rotate(-60deg);
-                margin-top: 0px;
-                margin-bottom: 2px;
-                color: #fff;
-                text-shadow: 0 1px 6px #000a;
-            '>{name}</div>
-        </div>"""
-    labels_html += "</div>"
+    col1, col2= st.columns([3,1], gap="medium")
 
-    st.markdown(f"""
-    <div style='width: 100%;'>
-    <div style='font-size:1.3em; font-weight:700; margin-bottom:20px; color:#fff;'>
-        Global Feature Importance
-    </div>
-    {bars_html}
-    {labels_html}
-    </div>
-    """, unsafe_allow_html=True)
-    bar_html = "<div style='display: flex; align-items: flex-end; height: 240px; gap: 14px;'>"
+    with col2: 
+        # Sort the global importance
+        glob_imp_sorted = dict(sorted(glob_imp.items(), key=lambda item: item[1], reverse=True))
 
-    bar_html += "</div>"
+        # Top N and Bottom N
+        top_n = 5
+        bottom_n = 5
+
+        top_features = list(glob_imp_sorted.items())[:top_n]
+        bottom_features = list(glob_imp_sorted.items())[-bottom_n:]
+
+        markdown_html = f"""
+        <div style='width: 100%;'>
+            <div style='font-size:1.3em; font-weight:700; margin-bottom:10px; color:#1fc974;'>
+                🔥 Most Important Features Overall
+            </div>
+            <div style='display: grid; grid-template-columns: 1fr auto; gap: 10px; color:#fff; font-size:1em; line-height:1.8;'>
+        """
+
+        for i, (name, val) in enumerate(top_features, 1):
+            val_formatted = f"{int(val):,}"
+            markdown_html += f"""
+            <div><b>{i}° {name}</b></div>
+            <div style='text-align: right;'> ${val_formatted}</div>
+            """
+
+        markdown_html += """
+            </div>
+            <div style='font-size:1.3em; font-weight:700; margin:30px 0 10px; color:#f75d59;'>
+                🧊 Least Important Features Overall
+            </div>
+            <div style='display: grid; grid-template-columns: 1fr auto; gap: 10px; color:#fff; font-size:1em; line-height:1.8;'>
+        """
+
+        for i, (name, val) in enumerate(bottom_features, 1):
+            val_formatted = f"{int(val):,}"
+            markdown_html += f"""
+            <div><b>{i}° {name}</b></div>
+            <div style='text-align: right;'> ${val_formatted}</div>
+            """
+
+        markdown_html += """
+            </div>
+        </div>
+        """
+        components.html(markdown_html, height=600) 
+
+
+    with col1:
+        n = len(glob_imp)
+        cmap = cm.get_cmap('viridis', n)
+        max_height = glob_imp.values.max()
+
+        bar_gap = "1%"  # use percentage gap so it scales better
+        chart_height = 320
+
+        bars_html = f"<div style='display: flex; align-items: flex-end; height: {chart_height}px; gap: {bar_gap};'>"
+        for i, (name, val) in enumerate(glob_imp.items()):
+            color = mcolors.to_hex(cmap(i / (n-1) if n > 1 else 0))
+            max_height = glob_imp.values.max()
+            height_px = max(int((val / max_height) * (chart_height - 60)), 20)        
+            
+            bars_html += f"""
+            <div style='flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;'>
+                <div style='
+                    font-size: 1.08em; 
+                    margin-bottom: 4px; 
+                    color: #fff; 
+                    font-weight: 600; 
+                    text-shadow: 0 1px 4px #000c;
+                    height: 1.5em;
+                '>{i+1}°</div>
+                <div style='
+                    height: {height_px}px;
+                    background: {color};
+                    border-radius: 9px 9px 0 0;
+                    box-shadow: 0 2px 8px #0002;
+                    margin-bottom: 0;
+                    display: flex;
+                    width: 80%; /* make bar thinner inside its flex box */
+                    align-items: flex-end;
+                ' title="{name}: {val:.2f}"></div>
+            </div>"""
+        bars_html += "</div>"
+
+
+        # Second row: feature names, rotated, spaced to match bars
+        labels_html = "<div style='display: flex; gap: {}px; margin-top: 30px;'>".format(bar_gap)
+        for name in glob_imp.keys():
+            labels_html += f"""
+            <div style='flex:1; display: flex; justify-content: center;'>
+                <div style='
+                    font-size: 1em;
+                    text-align: center;
+                    max-width: 110px;
+                    overflow: hidden;
+                    white-space: normal;
+                    word-break: break-word;
+                    transform: rotate(-60deg);
+                    margin-top: 0px;
+                    margin-bottom: 2px;
+                    color: #fff;
+                    text-shadow: 0 1px 6px #000a;
+                '>{name}</div>
+            </div>"""
+        labels_html += "</div>"
+
+        st.markdown(f"""
+        <div style='width: 100%;'>
+        <div style='font-size:1.3em; font-weight:700; margin-bottom:20px; color:#fff;'>
+            Ranking of global features
+        </div>
+        {bars_html}
+        {labels_html}
+        </div>
+        """, unsafe_allow_html=True)
+
